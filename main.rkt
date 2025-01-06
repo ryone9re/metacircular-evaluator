@@ -189,6 +189,48 @@
 
 (define (procedure-environment p) (cadddr p))
 
+;; Delay evaluation
+(define (actual-value exp env)
+  (force-it (eval exp env)))
+
+(define (force-it obj)
+  (cond ((thunk? obj)
+         (let ((result (actual-value (thunk-exp obj)
+                                     (thunk-env obj))))
+           (set-car! obj 'evaluated-thunk)
+           (set-car! (cdr obj) result)
+           (set-cdr! (cdr obj) '())
+           result))
+        ((evaluated-thunk? obj) (thunk-value obj))
+        (else obj)))
+
+(define (delay-it exp env)
+  (list 'thunk exp env))
+
+(define (thunk? obj)
+  (tagged-list? obj 'thunk))
+
+(define (thunk-exp thunk) (cadr thunk))
+
+(define (thunk-env thunk) (caddr thunk))
+
+(define (evaluated-thunk? obj)
+  (tagged-list? obj 'evaluated-thunk))
+
+(define (thunk-value evaluated-thunk) (cadr evaluated-thunk))
+
+(define (list-of-arg-values exps env)
+  (if (no-operands? exps)
+      '()
+      (cons (actual-value (first-operand exps) env)
+            (list-of-arg-values (rest-operands exps) env))))
+
+(define (list-of-delayed-args exps env)
+  (if (no-operands? exps)
+      '()
+      (cons (delay-it (first-operand exps) env)
+            (list-of-delayed-args (rest-operands exps) env))))
+
 ;; Evaluator core
 (define (eval exp env)
   (cond ((self-evaluating? exp) exp)
@@ -202,24 +244,26 @@
                                        env))
         ((begin? exp) (eval-sequence (begin-actions exp) env))
         ((cond? exp) (eval (cond->if exp) env))
-        ((application? exp) (metacircular-apply (eval (operator exp) env)
-                                   (list-of-values (operands exp) env)))
+        ((application? exp)
+         (metacircular-apply (actual-value (operator exp) env)
+                             (operands exp)
+                             env))
         (else (error "Unknown expression type: EVAL" exp))))
 
-(define (metacircular-apply procedure arguments)
+(define (metacircular-apply procedure arguments env)
   (cond ((primitive-procedure? procedure)
-         (apply-primitive-procedure procedure arguments))
+         (apply-primitive-procedure procedure (list-of-arg-values arguments env)))
         ((compound-procedure? procedure)
          (eval-sequence
             (procedure-body procedure)
             (extend-environment
                (procedure-parameters procedure)
-               arguments
+               (list-of-delayed-args arguments env)
                (procedure-environment procedure))))
         (else (error "Unknown procedure type: METACIRCULAR-APPLY" procedure))))
 
 (define (eval-if exp env)
-  (if (true? (eval (if-predicate exp) env))
+  (if (true? (actual-value (if-predicate exp) env))
       (eval (if-consequent exp) env)
       (eval (if-alternative exp) env)))
 
@@ -250,10 +294,45 @@
 
 ;; Primitive procedures
 (define primitive-procedures
-  (list (list 'car car)
+  (list (list '* *)
+        (list '+ +)
+        (list '- -)
+        (list '/ /)
+        (list '< <)
+        (list '= =)
+        (list '> >)
+        (list 'assoc assoc)
+        (list 'atan atan)
+        (list 'cadr cadr)
+        (list 'car car)
         (list 'cdr cdr)
         (list 'cons cons)
-        (list 'null? null?)))
+        (list 'cos cos)
+        (list 'display display)
+        (list 'eq? eq?)
+        (list 'error error)
+        (list 'list list)
+        (list 'log log)
+        (list 'max max)
+        (list 'min min)
+        (list 'newline newline)
+        (list 'not not)
+        (list 'null? null?)
+        (list 'number? number?)
+        (list 'pair? pair?)
+        (list 'quotient quotient)
+        (list 'random random)
+        (list 'read read)
+        (list 'remainder remainder)
+        (list 'round round)
+        (list 'runtime runtime)
+        (list 'set-car! set-car!)
+        (list 'set-cdr! set-cdr!)
+        (list 'sin sin)
+        (list 'symbol? symbol?)
+        (list 'vector-ref vector-ref)
+        (list 'vector-set! vector-set!)
+        ))
 
 (define (primitive-procedure-names) (map car primitive-procedures))
 
@@ -285,7 +364,7 @@
 (define (driver-loop)
   (prompt-for-input input-prompt)
   (let ((input (read)))
-    (let ((output (eval input the-global-environment)))
+    (let ((output (actual-value input the-global-environment)))
       (announce-output output-prompt)
       (user-print output)))
   (driver-loop))
@@ -301,3 +380,6 @@
                      (procedure-body object)
                      '<procedure-env>))
       (display object)))
+
+;; EXEC
+(driver-loop)
