@@ -108,6 +108,18 @@
 (define (make-lambda parameters body)
   (cons 'lambda (cons parameters body)))
 
+(define (let? exp) (tagged-list? exp 'let))
+
+(define (let-bindings exp) (cadr exp))
+
+(define (let-body exp) (cddr exp))
+
+(define (let->combination exp)
+  (let ((parameters (map car (let-bindings exp)))
+        (exps (map cadr (let-bindings exp)))
+        (body (let-body exp)))
+    (cons (make-lambda parameters body) exps)))
+
 (define (if? exp) (tagged-list? exp 'if))
 
 (define (if-predicate exp) (cadr exp))
@@ -206,6 +218,7 @@
         ((definition? exp) (analyze-definition exp))
         ((if? exp) (analyze-if exp))
         ((lambda? exp) (analyze-lambda exp))
+        ((let? exp) (analyze (let->combination exp)))
         ((begin? exp) (analyze-sequence (begin-actions exp)))
         ((cond? exp) (analyze (cond->if exp)))
         ((amb? exp) (analyze-amb exp))
