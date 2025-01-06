@@ -108,6 +108,18 @@
 (define (make-lambda parameters body)
   (cons 'lambda (cons parameters body)))
 
+(define (let? exp) (tagged-list? exp 'let))
+
+(define (let-bindings exp) (cadr exp))
+
+(define (let-body exp) (cddr exp))
+
+(define (let->combination exp)
+  (let ((parameters (map car (let-bindings exp)))
+        (exps (map cadr (let-bindings exp)))
+        (body (let-body exp)))
+    (cons (make-lambda parameters body) exps)))
+
 (define (if? exp) (tagged-list? exp 'if))
 
 (define (if-predicate exp) (cadr exp))
@@ -200,6 +212,7 @@
         ((lambda? exp) (make-procedure (lambda-parameters exp)
                                        (lambda-body exp)
                                        env))
+        ((let? exp) (eval (let->combination exp) env))
         ((begin? exp) (eval-sequence (begin-actions exp) env))
         ((cond? exp) (eval (cond->if exp) env))
         ((application? exp) (metacircular-apply (eval (operator exp) env)
