@@ -394,6 +394,7 @@
 (define primitive-procedures
   (list (list 'null? null?)
         (list 'not not)
+        (list 'list list)
         (list 'cons cons)
         (list 'car car)
         (list 'cdr cdr)
