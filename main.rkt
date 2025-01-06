@@ -301,3 +301,6 @@
                      (procedure-body object)
                      '<procedure-env>))
       (display object)))
+
+;; EXEC
+(driver-loop)
